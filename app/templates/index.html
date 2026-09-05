@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CVSS Lens | 漏洞评分工作台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">CV</span>
+      <span><strong>CVSS Lens</strong><small>LLM 漏洞评分工作台</small></span>
+    </a>
+    <div class="status-pill"><span class="status-dot"></span><span id="system-status">检查服务中</span></div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">SECURITY INTELLIGENCE / 01</p>
+        <h1>把漏洞描述，<br><em>变成可审计的分数。</em></h1>
+        <p class="hero-copy">导入 CVE 数据，提取 CVSS v3.1 指标，并用本地规则或 LLM 生成可追溯的评分结果。</p>
+      </div>
+      <div class="hero-note"><span>01</span><p>本地优先<br><strong>无需 API Key 也能运行</strong></p></div>
+    </section>
+
+    <section class="workspace-grid">
+      <article class="panel import-panel">
+        <div class="panel-heading"><div><p class="section-label">DATA INGESTION</p><h2>导入漏洞数据</h2></div><span class="panel-index">01</span></div>
+        <p class="muted">上传 JSON 或 CSV 文件，系统会自动清洗并写入 SQLite。</p>
+        <label class="dropzone" for="dataset-file">
+          <span class="upload-icon">↑</span><strong id="file-name">选择数据集文件</strong><small>支持 .json / .csv</small>
+        </label>
+        <input id="dataset-file" type="file" accept=".json,.csv" hidden>
+        <button class="button primary" id="import-button">导入数据集 <span>↗</span></button>
+        <div id="import-result" class="feedback" role="status"></div>
+      </article>
+
+      <article class="panel score-panel">
+        <div class="panel-heading"><div><p class="section-label">SCORING CONSOLE</p><h2>快速评分</h2></div><span class="panel-index">02</span></div>
+        <p class="muted">输入已经导入的 CVE ID，生成 CVSS v3.1 基础评分。</p>
+        <label class="field-label" for="cve-id">CVE IDENTIFIER</label>
+        <div class="input-row"><input id="cve-id" value="CVE-2024-0001" placeholder="例如 CVE-2024-0001"><button class="button primary" id="score-button">评分</button></div>
+        <label class="toggle"><input id="use-llm" type="checkbox"><span class="toggle-ui"></span><span>启用 LLM 增强</span></label>
+        <div id="score-result" class="result-card empty">评分结果将在这里显示</div>
+      </article>
+    </section>
+
+    <section class="lower-grid">
+      <article class="panel query-panel">
+        <div class="panel-heading"><div><p class="section-label">RECORD LOOKUP</p><h2>查看 CVE 记录</h2></div><span class="panel-index">03</span></div>
+        <div class="input-row"><input id="lookup-id" placeholder="输入 CVE ID"><button class="button outline" id="lookup-button">查询记录</button></div>
+        <pre id="lookup-result" class="json-view">等待查询...</pre>
+      </article>
+      <article class="panel compare-panel">
+        <div class="panel-heading"><div><p class="section-label">MODEL REVIEW</p><h2>评分对比</h2></div><span class="panel-index">04</span></div>
+        <p class="muted">将最新评分与数据集中的官方分数进行比较。</p>
+        <button class="button outline" id="compare-button">查看评分差异 <span>→</span></button>
+        <div id="compare-result" class="compare-result">尚未选择记录</div>
+      </article>
+    </section>
+
+    <footer><span>CVSS LENS / v1.0.0</span><a href="/docs">API 文档 ↗</a></footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
