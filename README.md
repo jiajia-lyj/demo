@@ -33,6 +33,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## 三、启动服务
 
+### 3.1 使用本地 Python 环境
+
 在第一个 PowerShell 窗口执行：
 
 ```powershell
@@ -53,6 +55,22 @@ Uvicorn running on http://127.0.0.1:8000
 - 健康检查：http://127.0.0.1:8000/health
 
 在第二个 PowerShell 窗口中执行后续导入和评分命令。
+
+### 3.2 使用 Docker Compose
+
+已安装 Docker Desktop 时，也可以在项目根目录执行：
+
+```powershell
+docker compose up --build
+```
+
+服务启动后访问 `http://127.0.0.1:8000/`。停止服务并删除容器：
+
+```powershell
+docker compose down
+```
+
+Compose 会将项目的 `data/` 映射到容器中的 `/app/data`，数据库数据会保留在本地。
 
 ## 四、导入外部数据集
 
@@ -160,8 +178,10 @@ curl.exe "http://127.0.0.1:8000/api/v1/cve/CVE-2024-0001"
 确认数据导入成功后，对单条 CVE 进行本地规则评分：
 
 ```powershell
-curl.exe -X POST "http://127.0.0.1:8000/api/v1/score/CVE-2024-12345?use_llm=false"
+curl.exe -X POST "http://127.0.0.1:8000/api/v1/score/CVE-2024-0001?use_llm=false"
 ```
+
+项目自带示例数据的 CVE 编号是 `CVE-2024-0001`；使用外部数据时请替换为已导入的编号。
 
 批量评分全部已导入数据：
 
@@ -179,10 +199,12 @@ curl.exe -X POST "http://127.0.0.1:8000/api/v1/score/batch" `
   -d '{"cve_ids":["CVE-2024-12345","CVE-2024-23456"]}'
 ```
 
+不传 `cve_ids` 时，接口按 CVE 编号顺序评分前 20 条记录；可以通过 `limit` 指定数量，范围为 1 到 500。
+
 查看评分与原始数据中官方分数的差异：
 
 ```powershell
-curl.exe "http://127.0.0.1:8000/api/v1/score/CVE-2024-12345/compare"
+curl.exe "http://127.0.0.1:8000/api/v1/score/CVE-2024-0001/compare"
 ```
 
 ## 六、配置 LLM 评分
@@ -197,6 +219,17 @@ $env:LLM_MODEL = "deepseek-chat"
 ```
 
 然后评分时不传 `use_llm=false`，或显式传入 `use_llm=true`。API 调用失败时会自动回退到本地规则评分。`.env.example` 和 `.env` 可用于 Docker Compose 配置；直接运行 Uvicorn 时，PowerShell 环境变量最可靠。
+
+可选配置项如下：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DATABASE_PATH` | `data/cvss.db` | SQLite 数据库路径 |
+| `LLM_BASE_URL` | 空 | OpenAI 兼容接口地址 |
+| `LLM_API_KEY` | 空 | LLM API 密钥 |
+| `LLM_MODEL` | `deepseek-chat` | 使用的模型名称 |
+| `LLM_TIMEOUT` | `30` | 请求超时时间，单位为秒 |
+| `LLM_TEMPERATURE` | `0` | LLM 采样温度 |
 
 其他模块可通过 `app.core.llm_client.get_instructor_client()` 获取统一的 Instructor 客户端；传入 `Settings` 可覆盖默认配置。LLM 无法判断的指标会返回 `DONT_KNOW`，评分流程会保留本地规则或 NVD 已有的可用值。
 
@@ -220,6 +253,16 @@ curl.exe -X POST "http://127.0.0.1:8000/api/v1/score/CVE-2024-12345?use_llm=fals
 curl.exe "http://127.0.0.1:8000/health"
 ```
 
+### 运行测试
+
+安装依赖后，在项目根目录执行：
+
+```powershell
+pytest -q
+```
+
+需要真实 LLM 服务的端到端测试应在配置 `LLM_BASE_URL` 和 `LLM_API_KEY` 后运行；未配置时，普通测试和本地规则评分仍可执行。
+
 ### 数据库在哪里
 
 默认数据库文件是 `data/cvss.db`。必须从项目根目录启动服务，否则相对路径可能指向其他目录。
@@ -235,6 +278,16 @@ curl.exe "http://127.0.0.1:8000/health"
 - `POST /api/v1/score/dtd/predict`：使用 DTD 提示分析单个 CVSS 指标
 - `POST /api/v1/score/dtd/{cve_id}`：对单条 CVE 执行八项 DTD 分析并评分
 - `GET /health`：健康检查
+
+DTD 单指标分析请求示例：
+
+```powershell
+curl.exe -X POST "http://127.0.0.1:8000/api/v1/score/dtd/predict" `
+  -H "Content-Type: application/json" `
+  -d '{"cve_description":"A remote attacker can execute code without authentication.","metric":"AV"}'
+```
+
+批量评分请求体支持两种形式：`{"limit":20}`，或 `{"cve_ids":["CVE-2024-0001"]}`。接口返回评分结果数组。
 
 ## Web 工作台
 
