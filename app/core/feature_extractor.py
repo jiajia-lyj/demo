@@ -17,15 +17,16 @@ def _roundup(value: float) -> float:
 
 
 def calculate_score(features: CVSSFeatures) -> tuple[str, float, str]:
+    attack_vector = "ADJACENT" if features.attack_vector == "ADJACENT_NETWORK" else features.attack_vector
     scope = features.scope[:1]
     privilege = VALUES["PR"][features.privileges_required]
     privilege_value = privilege if isinstance(privilege, float) else privilege[scope]
     impact = 1 - ((1 - VALUES["CIA"][features.confidentiality]) * (1 - VALUES["CIA"][features.integrity]) * (1 - VALUES["CIA"][features.availability]))
     impact_score = 6.42 * impact if scope == "U" else 7.52 * (impact - 0.029) - 3.25 * (impact - 0.02) ** 15
-    exploitability = 8.22 * VALUES["AV"][features.attack_vector] * VALUES["AC"][features.attack_complexity] * privilege_value * VALUES["UI"][features.user_interaction]
+    exploitability = 8.22 * VALUES["AV"][attack_vector] * VALUES["AC"][features.attack_complexity] * privilege_value * VALUES["UI"][features.user_interaction]
     score = 0.0 if impact_score <= 0 else _roundup(min((impact_score + exploitability) if scope == "U" else 1.08 * (impact_score + exploitability), 10))
     severity = "NONE" if score == 0 else "LOW" if score <= 3.9 else "MEDIUM" if score <= 6.9 else "HIGH" if score <= 8.9 else "CRITICAL"
-    vector = f"CVSS:3.1/AV:{features.attack_vector[0]}/AC:{features.attack_complexity[0]}/PR:{features.privileges_required[0]}/UI:{features.user_interaction[0]}/S:{scope}/C:{features.confidentiality[0]}/I:{features.integrity[0]}/A:{features.availability[0]}"
+    vector = f"CVSS:3.1/AV:{attack_vector[0]}/AC:{features.attack_complexity[0]}/PR:{features.privileges_required[0]}/UI:{features.user_interaction[0]}/S:{scope}/C:{features.confidentiality[0]}/I:{features.integrity[0]}/A:{features.availability[0]}"
     return vector, score, severity
 
 
@@ -41,9 +42,24 @@ def infer_features(description: str, cve_id: str, values: dict[str, str] | None 
         "integrity": "HIGH" if any(word in text for word in ("arbitrary code", "code execution", "modify", "write")) else "LOW",
         "availability": "HIGH" if any(word in text for word in ("denial of service", "crash", "execute code", "code execution")) else "NONE",
     }
+    field_aliases = {
+        "AV": "attack_vector",
+        "AC": "attack_complexity",
+        "PR": "privileges_required",
+        "UI": "user_interaction",
+        "S": "scope",
+        "C": "confidentiality",
+        "I": "integrity",
+        "A": "availability",
+    }
     short_values = {"N": "NONE", "L": "LOW", "H": "HIGH", "R": "REQUIRED", "U": "UNCHANGED", "C": "CHANGED", "A": "ADJACENT", "P": "PHYSICAL"}
     if values:
-        normalized = {key: short_values.get(str(value).upper(), str(value).upper()) for key, value in values.items()}
+        normalized = {
+            field_aliases.get(key, key): short_values.get(str(value).upper(), str(value).upper())
+            for key, value in values.items()
+        }
+        if normalized.get("attack_vector") == "ADJACENT_NETWORK":
+            normalized["attack_vector"] = "ADJACENT"
         result.update({key: value for key, value in normalized.items() if key in result})
     return CVSSFeatures(cve_id=cve_id, **result)
 

@@ -8,8 +8,16 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.core.preprocessor import Preprocessor
+from app.core.prompt_templates import build_dtd_prompt
 from app.core.scheduler import Database, Scheduler
-from app.schemas import BatchScoreRequest, CVERecord, ImportResponse
+from app.schemas import (
+    BatchScoreRequest,
+    CVERecord,
+    DTDScoreResponse,
+    DTDPredictRequest,
+    DTDPredictResponse,
+    ImportResponse,
+)
 
 
 database = Database()
@@ -96,3 +104,36 @@ def compare_score(cve_id: str) -> dict:
     llm_score = latest.get("base_score") or latest.get("cvss_base_score")
     return {"cve_id": cve_id, "llm_score": llm_score, "official_score": official_score,
             "difference": None if official_score is None else round(abs(llm_score - float(official_score)), 2)}
+
+
+@router.post("/api/v1/score/dtd/predict", response_model=DTDPredictResponse)
+def dtd_predict(request: DTDPredictRequest) -> DTDPredictResponse:
+    try:
+        prompt = build_dtd_prompt(request.metric)
+    except ValueError as error:
+        raise HTTPException(400, detail={"code": 40002, "message": str(error)}) from error
+    value = scheduler.llm.predict_with_dtd(request.cve_description, request.metric)
+    return DTDPredictResponse(
+        metric=request.metric,
+        metric_name=prompt.metric_name,
+        value=value,
+        valid_labels=prompt.valid_labels,
+    )
+
+
+@router.post("/api/v1/score/dtd/{cve_id}", response_model=DTDScoreResponse)
+def dtd_score_cve(cve_id: str) -> DTDScoreResponse:
+    try:
+        result, dtd_values = scheduler.score_with_dtd(cve_id.upper())
+    except KeyError as error:
+        raise HTTPException(404, detail={"code": 40401, "message": "CVE ID不存在"}) from error
+    return DTDScoreResponse(
+        cve_id=result.cve_id,
+        cvss_vector=result.cvss_vector,
+        cvss_base_score=result.cvss_base_score,
+        severity=result.severity,
+        features=result.features,
+        dtd_values=dtd_values,
+        llm_model=result.llm_model,
+        timestamp=result.timestamp,
+    )

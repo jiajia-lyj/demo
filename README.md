@@ -1,6 +1,6 @@
 # 基于 LLM 的 CVSS 指标评分系统
 
-一个可运行的 FastAPI 项目，实现 CVE 数据导入、清洗、CVSS v3.1 特征提取、评分、批量处理和结果对比。配置 LLM 环境变量后，会通过 OpenAI 兼容的 `/chat/completions` 接口进行特征增强；未配置时自动使用本地规则推断，因此可离线演示。
+一个可运行的 FastAPI 项目，实现 CVE 数据导入、清洗、CVSS v3.1 特征提取、评分、批量处理、DTD 单指标分析和结果对比。浏览器工作台集中覆盖导入、评分、记录查询和模型复核流程。配置 LLM 环境变量后，会通过 OpenAI 兼容的 `/chat/completions` 接口进行特征增强；未配置时自动使用本地规则推断，因此可离线演示。
 
 ## 一、运行环境
 
@@ -59,7 +59,6 @@ Uvicorn running on http://127.0.0.1:8000
 ### 4.1 JSON 数据格式
 
 项目当前使用 NVD 1.1 JSON 格式。示例文件 `data/raw/sample_cves.json` 包含一条完整 CVE 记录，结构如下：
-
 ```json
 {
   "cve": {
@@ -188,7 +187,7 @@ curl.exe "http://127.0.0.1:8000/api/v1/score/CVE-2024-12345/compare"
 
 ## 六、配置 LLM 评分
 
-默认情况下使用本地规则完成评分，不需要 API Key。使用 LLM 增强时，在启动服务前于 PowerShell 设置环境变量：
+默认情况下使用本地规则完成评分，不需要 API Key。项目通过 `instructor` 将 OpenAI 兼容 API 的返回值约束为 Pydantic 模型，八个 CVSS v3.1 指标只接受官方标签或 `DONT_KNOW`。使用 LLM 增强时，在启动服务前于 PowerShell 设置环境变量：
 
 ```powershell
 $env:LLM_BASE_URL = "https://api.deepseek.com/v1"
@@ -198,6 +197,8 @@ $env:LLM_MODEL = "deepseek-chat"
 ```
 
 然后评分时不传 `use_llm=false`，或显式传入 `use_llm=true`。API 调用失败时会自动回退到本地规则评分。`.env.example` 和 `.env` 可用于 Docker Compose 配置；直接运行 Uvicorn 时，PowerShell 环境变量最可靠。
+
+其他模块可通过 `app.core.llm_client.get_instructor_client()` 获取统一的 Instructor 客户端；传入 `Settings` 可覆盖默认配置。LLM 无法判断的指标会返回 `DONT_KNOW`，评分流程会保留本地规则或 NVD 已有的可用值。
 
 ## 七、常见问题
 
@@ -231,7 +232,20 @@ curl.exe "http://127.0.0.1:8000/health"
 - `POST /api/v1/score/{cve_id}`：评分，`use_llm=false` 可强制本地模式
 - `POST /api/v1/score/batch`：批量评分
 - `GET /api/v1/score/{cve_id}/compare`：与原始数据中的官方分数对比
+- `POST /api/v1/score/dtd/predict`：使用 DTD 提示分析单个 CVSS 指标
+- `POST /api/v1/score/dtd/{cve_id}`：对单条 CVE 执行八项 DTD 分析并评分
 - `GET /health`：健康检查
+
+## Web 工作台
+
+打开 `http://127.0.0.1:8000/` 后，可以直接完成以下操作：
+
+- 拖放或选择 JSON/CSV 数据集并导入
+- 对已导入的 CVE 执行本地规则或 LLM 评分
+- 查看 CVSS 向量、分数、严重等级和八项指标
+- 使用 DTD 提示对单个指标进行核验
+- 查询原始记录，并比较模型分数与官方分数
+- 对单条 CVE 执行完整 DTD 评分
 
 
 ## 代码目录结构
@@ -244,6 +258,12 @@ demo/
 │   ├── main.py                             # 应用入口（uvicorn 启动脚本）
 │   ├── config.py                           # 全局配置管理（环境变量、数据库连接、API_KEY）
 │   ├── schemas.py                          # Pydantic 数据模型（请求/响应结构体）
+│   ├── models/                             # 兼容导出的模型路径
+│   │   ├── __init__.py
+│   │   └── schemas.py
+│   ├── services/                           # 数据库服务
+│   │   ├── __init__.py
+│   │   └── database.py
 │   ├── api/                                # 路由层（对外 RESTful 接口）
 │   │   ├── __init__.py
 │   │   └── endpoints.py                    # 具体 API 路由实现
@@ -253,8 +273,9 @@ demo/
 │   │   ├── feature_extractor.py            # CVSS 基础/时间/环境特征向量提取
 │   │   ├── llm_enhancer.py                 # LLM 特征增强与评分核心
 │   │   ├── chroma_client.py                # 向量数据库客户端（ChromaDB 增删改查）
-│   │   └── scheduler.py                    # 主流程调度器（管线编排）
-│   ├── templates/                          # 前端 HTML 模板（仅用于简单 Demo 界面）
+│   │   ├── scheduler.py                    # 主流程调度器（管线编排）
+│   │   └── prompt_templates.py             # CVSS DTD 提示模板
+│   ├── templates/                          # 前端 HTML 模板
 │   │   └── index.html
 │   ├── static/                             # 前端静态资源（CSS / JS）
 │   │   ├── styles.css

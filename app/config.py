@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 @dataclass(frozen=True)
@@ -9,6 +13,7 @@ class Settings:
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
     llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")
     llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "30"))
+    llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0"))
 
 
 settings = Settings()

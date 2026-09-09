@@ -1,5 +1,7 @@
 from app.core.feature_extractor import calculate_score, infer_features
 from app.core.preprocessor import Preprocessor
+from app.schemas import AttackVector
+from pydantic import ValidationError
 
 
 def test_cvss_31_known_critical_vector():
@@ -14,6 +16,16 @@ def test_feature_inference_requires_interaction():
     features = infer_features("A local vulnerability requires user interaction and discloses sensitive information.", "CVE-2024-2")
     assert features.user_interaction == "REQUIRED"
     assert features.attack_vector == "LOCAL"
+
+
+def test_cvss_metric_contract_accepts_dont_know_and_rejects_invalid_values():
+    assert AttackVector(value="DONT_KNOW").value == "DONT_KNOW"
+    try:
+        AttackVector(value="INVALID")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("invalid CVSS metric value should be rejected")
 
 
 def test_preprocessor_reads_nvd_11_record(tmp_path):
