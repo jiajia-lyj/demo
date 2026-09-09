@@ -72,7 +72,7 @@ def get_cve(cve_id: str) -> dict:
 @router.post("/api/v1/score/batch")
 def score_batch(request: BatchScoreRequest) -> list[dict]:
     records = [database.get_cve(cve_id.upper()) for cve_id in request.cve_ids] if request.cve_ids else database.list_cves(request.limit)
-    return [scheduler.score(record["cve_id"]).model_dump(mode="json") for record in records if record]
+    return [scheduler.score(record["cve_id"], use_llm=request.use_llm).model_dump(mode="json") for record in records if record]
 
 
 @router.post("/api/v1/score/{cve_id}")

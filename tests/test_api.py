@@ -24,5 +24,11 @@ def test_score_without_llm():
     assert response.json()["severity"] == "CRITICAL"
 
 
+def test_batch_score_without_llm():
+    response = client.post("/api/v1/score/batch", json={"cve_ids": ["CVE-2099-1"], "use_llm": False})
+    assert response.status_code == 200
+    assert response.json()[0]["cve_id"] == "CVE-2099-1"
+
+
 def test_missing_cve():
     assert client.get("/api/v1/cve/CVE-2099-404").status_code == 404

@@ -50,6 +50,11 @@
         <input id="dataset-file" type="file" accept=".json,.csv,application/json,text/csv" hidden>
         <button class="button primary" id="import-button">导入数据集 <span>↗</span></button>
         <div id="import-result" class="feedback" role="status"></div>
+        <div class="batch-controls">
+          <label class="field-label" for="batch-limit">批量分析数量（最多 500 条）</label>
+          <div class="input-row"><input id="batch-limit" type="number" min="1" max="500" value="20"><button class="button outline compact" id="batch-score-button">分析数据集</button></div>
+        </div>
+        <div id="batch-result" class="batch-result empty" aria-live="polite">导入后可批量分析当前数据集</div>
       </article>
 
       <article class="panel score-panel">

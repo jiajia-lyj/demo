@@ -58,6 +58,13 @@ function renderScore(data) {
   return `<div class="score-line"><span class="score-number">${escapeHtml(data.cvss_base_score)}</span><span class="severity severity-${escapeHtml(severityClass)}">${escapeHtml(data.severity)}</span></div><div class="vector-row"><div class="vector">${escapeHtml(data.cvss_vector)}</div><button class="copy-button" type="button" data-copy-vector="${escapeHtml(data.cvss_vector)}" title="复制 CVSS 向量">复制</button></div><div class="score-meta"><span>${escapeHtml(source)}</span><span>${escapeHtml(confidence)}</span><span>${escapeHtml(usage)}</span></div><div class="metric-grid">${renderMetrics(data.features)}</div>`;
 }
 
+function renderBatchResults(results) {
+  if (!results.length) return "没有找到可分析的 CVE 记录";
+  const average = (results.reduce((total, item) => total + Number(item.cvss_base_score || 0), 0) / results.length).toFixed(1);
+  const rows = results.map((item) => `<tr><td>${escapeHtml(item.cve_id)}</td><td><strong>${escapeHtml(item.cvss_base_score)}</strong></td><td><span class="severity severity-${escapeHtml(String(item.severity).toLowerCase())}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.cvss_vector)}</td></tr>`).join("");
+  return `<div class="batch-summary">已完成 ${results.length} 条 · 平均分 ${average}</div><div class="table-wrap"><table><thead><tr><th>CVE</th><th>分数</th><th>等级</th><th>向量</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 async function checkHealth() {
   try {
     const data = await request("/health");
@@ -117,6 +124,29 @@ $("#import-button").addEventListener("click", async () => {
   } finally {
     setBusy(button, false);
     output.removeAttribute("aria-busy");
+  }
+});
+
+$("#batch-score-button").addEventListener("click", async () => {
+  const output = $("#batch-result");
+  const limit = Math.max(1, Math.min(500, Number($("#batch-limit").value) || 20));
+  $("#batch-limit").value = limit;
+  const button = $("#batch-score-button");
+  setBusy(button, true, "分析中...");
+  output.className = "batch-result";
+  output.textContent = "正在分析已导入的数据集...";
+  try {
+    const data = await request("/api/v1/score/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit, use_llm: $("#use-llm").checked }),
+    });
+    output.innerHTML = renderBatchResults(data);
+    $("#mode-stat").textContent = "BATCH SCORED";
+  } catch (error) {
+    showMessage(output, `错误：${error.message}`, true);
+  } finally {
+    setBusy(button, false);
   }
 });
 

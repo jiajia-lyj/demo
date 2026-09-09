@@ -159,6 +159,7 @@ class ImportResponse(BaseModel):
 class BatchScoreRequest(BaseModel):
     cve_ids: list[str] | None = None
     limit: int = Field(default=20, ge=1, le=500)
+    use_llm: bool = True
 
 
 class DTDPredictRequest(BaseModel):
