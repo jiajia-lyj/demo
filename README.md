@@ -218,6 +218,14 @@ $env:LLM_MODEL = "deepseek-chat"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+也可以只配置 DeepSeek 专用密钥，系统会自动使用 `https://api.deepseek.com/v1` 和 `deepseek-chat`：
+
+```powershell
+$env:DEEPSEEK_API_KEY = "你的DeepSeek API密钥"
+```
+
+项目默认的 `.env` 已配置 DeepSeek 接口地址。请将 `DEEPSEEK_API_KEY` 填入 `.env`，重启服务后，Web 工作台会默认启用 DeepSeek 增强；未填写密钥时会自动回退到本地规则。
+
 然后评分时不传 `use_llm=false`，或显式传入 `use_llm=true`。API 调用失败时会自动回退到本地规则评分。`.env.example` 和 `.env` 可用于 Docker Compose 配置；直接运行 Uvicorn 时，PowerShell 环境变量最可靠。
 
 可选配置项如下：
@@ -227,6 +235,7 @@ $env:LLM_MODEL = "deepseek-chat"
 | `DATABASE_PATH` | `data/cvss.db` | SQLite 数据库路径 |
 | `LLM_BASE_URL` | 空 | OpenAI 兼容接口地址 |
 | `LLM_API_KEY` | 空 | LLM API 密钥 |
+| `DEEPSEEK_API_KEY` | 空 | DeepSeek API 密钥；配置后自动启用 DeepSeek |
 | `LLM_MODEL` | `deepseek-chat` | 使用的模型名称 |
 | `LLM_TIMEOUT` | `30` | 请求超时时间，单位为秒 |
 | `LLM_TEMPERATURE` | `0` | LLM 采样温度 |

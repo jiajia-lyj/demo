@@ -52,7 +52,8 @@ function renderMetrics(features = {}) {
 
 function renderScore(data) {
   const severityClass = String(data.severity || "").toLowerCase();
-  const source = data.llm_model ? `LLM · ${data.llm_model}` : "LOCAL RULES";
+  const provider = String(data.llm_model || "").toLowerCase().includes("deepseek") ? "DEEPSEEK" : "LLM";
+  const source = data.llm_model ? `${provider} · ${data.llm_model}` : "LOCAL RULES";
   const confidence = data.llm_confidence == null ? "未提供置信度" : `置信度 ${data.llm_confidence}`;
   const usage = data.token_usage?.total_tokens == null ? "未记录 token" : `${data.token_usage.total_tokens} tokens`;
   return `<div class="score-line"><span class="score-number">${escapeHtml(data.cvss_base_score)}</span><span class="severity severity-${escapeHtml(severityClass)}">${escapeHtml(data.severity)}</span></div><div class="vector-row"><div class="vector">${escapeHtml(data.cvss_vector)}</div><button class="copy-button" type="button" data-copy-vector="${escapeHtml(data.cvss_vector)}" title="复制 CVSS 向量">复制</button></div><div class="score-meta"><span>${escapeHtml(source)}</span><span>${escapeHtml(confidence)}</span><span>${escapeHtml(usage)}</span></div><div class="metric-grid">${renderMetrics(data.features)}</div>`;
@@ -61,21 +62,26 @@ function renderScore(data) {
 function renderBatchResults(results) {
   if (!results.length) return "没有找到可分析的 CVE 记录";
   const average = (results.reduce((total, item) => total + Number(item.cvss_base_score || 0), 0) / results.length).toFixed(1);
-  const rows = results.map((item) => `<tr><td>${escapeHtml(item.cve_id)}</td><td><strong>${escapeHtml(item.cvss_base_score)}</strong></td><td><span class="severity severity-${escapeHtml(String(item.severity).toLowerCase())}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.cvss_vector)}</td></tr>`).join("");
-  return `<div class="batch-summary">已完成 ${results.length} 条 · 平均分 ${average}</div><div class="table-wrap"><table><thead><tr><th>CVE</th><th>分数</th><th>等级</th><th>向量</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const rows = results.map((item) => `<tr><td>${escapeHtml(item.cve_id)}</td><td><strong>${escapeHtml(item.cvss_base_score)}</strong></td><td><span class="severity severity-${escapeHtml(String(item.severity).toLowerCase())}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.cvss_vector)}</td><td>${escapeHtml(item.llm_model || "LOCAL RULES")}</td></tr>`).join("");
+  return `<div class="batch-summary">已完成 ${results.length} 条 · 平均分 ${average}</div><div class="table-wrap"><table><thead><tr><th>CVE</th><th>分数</th><th>等级</th><th>向量</th><th>模型</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 async function checkHealth() {
   try {
     const data = await request("/health");
     const enabled = data.llm === "enabled";
-    $("#system-status").textContent = enabled ? "LLM 已连接" : "本地模式运行";
-    $("#engine-stat").textContent = enabled ? "LLM + RULES" : "LOCAL RULES";
+    const model = data.llm_model || "local-rules";
+    $("#system-status").textContent = enabled ? `${model} 已配置` : "本地模式运行";
+    $("#engine-stat").textContent = enabled ? `DEEPSEEK / ${model}` : "LOCAL RULES";
+    $("#model-status").classList.toggle("enabled", enabled);
+    $("#model-status span:last-child").textContent = enabled ? `模型：${model}` : "模型：本地规则回退";
     $("#mode-stat").textContent = "ONLINE";
     $(".status-dot").classList.add("ready");
   } catch (error) {
     $("#system-status").textContent = "服务不可用";
     $("#mode-stat").textContent = "OFFLINE";
+    $("#model-status").classList.remove("enabled");
+    $("#model-status span:last-child").textContent = "模型：服务不可用";
     $(".status-dot").classList.remove("ready");
   }
 }

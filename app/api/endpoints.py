@@ -34,7 +34,11 @@ def home(request: Request) -> HTMLResponse:
 
 @router.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "llm": "enabled" if scheduler.llm.enabled else "local-fallback"}
+    return {
+        "status": "ok",
+        "llm": "enabled" if scheduler.llm.enabled else "local-fallback",
+        "llm_model": scheduler.llm.settings.llm_model if scheduler.llm.enabled else "local-rules",
+    }
 
 
 @router.post("/api/v1/cve/import", response_model=ImportResponse)

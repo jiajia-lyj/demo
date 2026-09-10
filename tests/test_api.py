@@ -16,6 +16,7 @@ def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert "llm_model" in response.json()
 
 
 def test_score_without_llm():

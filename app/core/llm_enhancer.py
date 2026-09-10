@@ -62,7 +62,15 @@ class LLMEnhancer:
                 temperature=self.settings.llm_temperature,
             )
         except Exception as error:
-            logger.warning("DTD predict LLM call failed for %s: %s", metric, error)
+            error_text = str(error)
+            if "402" in error_text or "Insufficient Balance" in error_text:
+                logger.warning(
+                    "DeepSeek balance is insufficient for DTD metric %s; "
+                    "add balance or replace DEEPSEEK_API_KEY",
+                    metric,
+                )
+            else:
+                logger.warning("DTD predict LLM call failed for %s: %s", metric, error)
             return DONT_KNOW
         value = str(result.value).strip().upper()
         if value not in prompt.valid_labels:

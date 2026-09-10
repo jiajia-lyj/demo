@@ -62,7 +62,8 @@
         <p class="muted">输入已导入的 CVE ID，生成基础分数和八项指标快照。</p>
         <label class="field-label" for="cve-id">CVE IDENTIFIER</label>
         <div class="input-row"><input id="cve-id" value="CVE-2024-0001" placeholder="例如 CVE-2024-0001"><button class="button primary compact" id="score-button">评分</button></div>
-        <label class="toggle"><input id="use-llm" type="checkbox"><span class="toggle-ui"></span><span>启用 LLM 增强</span><small>失败自动回退</small></label>
+        <label class="toggle"><input id="use-llm" type="checkbox" checked><span class="toggle-ui"></span><span>启用 DeepSeek 增强</span><small>失败自动回退</small></label>
+        <div id="model-status" class="model-status" aria-live="polite"><span class="model-status-dot"></span><span>正在检查模型配置...</span></div>
         <div id="score-result" class="result-card empty" aria-live="polite">评分结果将在这里显示</div>
       </article>
     </section>

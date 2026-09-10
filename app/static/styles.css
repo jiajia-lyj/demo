@@ -424,6 +424,33 @@ button { cursor: pointer; }
 .toggle input:checked + .toggle-ui { background: var(--coral); }
 .toggle input:checked + .toggle-ui::after { left: 15px; }
 
+.model-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  color: var(--muted);
+  background: rgba(17, 36, 41, 0.04);
+  border: 1px solid rgba(17, 36, 41, 0.08);
+  border-radius: 10px;
+  font: 10px 'DM Mono', monospace;
+  letter-spacing: 0.03em;
+}
+.model-status.enabled {
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  border-color: rgba(13, 123, 116, 0.2);
+}
+.model-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.model-status.enabled .model-status-dot { background: var(--teal); }
+
 .result-card {
   margin-top: 18px;
   padding: 16px;
