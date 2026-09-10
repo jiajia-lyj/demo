@@ -66,7 +66,7 @@ class LLMEnhancer:
             if "402" in error_text or "Insufficient Balance" in error_text:
                 logger.warning(
                     "DeepSeek balance is insufficient for DTD metric %s; "
-                    "add balance or replace DEEPSEEK_API_KEY",
+                    "add balance or replace the configured API key",
                     metric,
                 )
             else:
