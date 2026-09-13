@@ -109,6 +109,11 @@ async function checkHealth() {
     $("#model-status span:last-child").textContent = enabled ? `模型：${model}` : "模型：本地规则回退";
     $("#mode-stat").textContent = "ONLINE";
     $(".status-dot").classList.add("ready");
+    const useLlm = $("#use-llm");
+    if (useLlm) {
+      useLlm.checked = enabled;
+      useLlm.disabled = true;
+    }
   } catch (error) {
     $("#system-status").textContent = "服务不可用";
     $("#mode-stat").textContent = "OFFLINE";

@@ -231,7 +231,7 @@ def compare_score(cve_id: str) -> dict:
     if not record:
         raise HTTPException(404, detail={"code": 40401, "message": "CVE ID不存在"})
     if not latest:
-        latest = scheduler.score(cve_id, use_llm=False).model_dump(mode="json")
+        latest = scheduler.score(cve_id, use_llm=scheduler.llm.enabled).model_dump(mode="json")
     try:
         raw = json.loads(record.get("raw_data") or "{}")
         official_score = raw.get("cvss_base_score") or raw.get("base_score")
@@ -414,7 +414,7 @@ def compare_view(cve_id: str) -> CompareViewResponse:
     latest = database.latest_score(cve_id)
     if not latest:
         try:
-            scored = scheduler.score(cve_id, use_llm=False)
+            scored = scheduler.score(cve_id, use_llm=scheduler.llm.enabled)
             latest = scored.model_dump(mode="json")
         except KeyError as error:
             raise HTTPException(404, detail={"code": 40401, "message": "CVE ID不存在"}) from error
