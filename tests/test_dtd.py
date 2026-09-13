@@ -17,7 +17,7 @@ from app.core.prompt_templates import (
     build_dtd_prompt,
 )
 from app.main import app
-from app.schemas import CVERecord
+from app.schemas import CVERecord, CVSSLLMResponse
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -96,6 +96,36 @@ def _enabled_settings() -> Settings:
     return Settings(llm_base_url="http://localhost", llm_api_key="key", llm_model="m")
 
 
+def test_enhance_reads_values_from_serialized_metric_models():
+    enhancer = LLMEnhancer(_enabled_settings())
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = CVSSLLMResponse(
+        attack_vector={"value": "NETWORK"},
+        attack_complexity={"value": "LOW"},
+        privileges_required={"value": "NONE"},
+        user_interaction={"value": "NONE"},
+        scope={"value": "UNCHANGED"},
+        confidentiality={"value": "HIGH"},
+        integrity={"value": "HIGH"},
+        availability={"value": "HIGH"},
+    )
+    with patch("app.core.llm_enhancer.get_instructor_client", return_value=mock_client):
+        values, confidence, usage = enhancer.enhance("Remote code execution.", "CVE-2024-0001")
+
+    assert values == {
+        "attack_vector": "NETWORK",
+        "attack_complexity": "LOW",
+        "privileges_required": "NONE",
+        "user_interaction": "NONE",
+        "scope": "UNCHANGED",
+        "confidentiality": "HIGH",
+        "integrity": "HIGH",
+        "availability": "HIGH",
+    }
+    assert confidence == 0.8
+    assert usage is None
+
+
 def test_predict_with_dtd_disabled_returns_dont_know():
     enhancer = _disabled_enhancer()
     assert enhancer.predict_with_dtd("remote code execution", "AV") == DONT_KNOW
@@ -115,6 +145,19 @@ def test_predict_with_dtd_enabled_returns_label():
     sent_content = call_kwargs["messages"][0]["content"]
     assert "A remote unauthenticated exploit." in sent_content
     assert "Attack Vector" in sent_content
+
+
+def test_predict_with_dtd_uses_provider_model_id():
+    enhancer = LLMEnhancer(Settings(
+        llm_base_url="http://localhost",
+        llm_api_key="key",
+        llm_model="DeepSeek-V4-Flash",
+    ))
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = MetricPrediction(value="NETWORK")
+    with patch("app.core.llm_enhancer.get_instructor_client", return_value=mock_client):
+        assert enhancer.predict_with_dtd("remote exploit", "AV") == "NETWORK"
+    assert mock_client.chat.completions.create.call_args.kwargs["model"] == "deepseek-ai/DeepSeek-V4-Flash"
 
 
 def test_predict_with_dtd_normalizes_lowercase_label():

@@ -1,8 +1,7 @@
-# app/utils/fvp_parser.py
+from __future__ import annotations
 
 import re
 import logging
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ ALLOWED_VALUES = {
 
 METRIC_KEYS = list(ALLOWED_VALUES.keys())  # ["AV", "AC", ...]
 
-def parse_fvp_response(text: str) -> Dict[str, str]:
+def parse_fvp_response(text: str) -> dict[str, str]:
     """
     从 LLM 响应文本中解析 8 个 CVSS 指标。
     

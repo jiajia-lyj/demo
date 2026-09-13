@@ -51,8 +51,8 @@
         <button class="button primary" id="import-button">导入数据集 <span>↗</span></button>
         <div id="import-result" class="feedback" role="status"></div>
         <div class="batch-controls">
-          <label class="field-label" for="batch-limit">批量分析数量（最多 500 条）</label>
-          <div class="input-row"><input id="batch-limit" type="number" min="1" max="500" value="20"><button class="button outline compact" id="batch-score-button">分析数据集</button></div>
+          <label class="field-label" for="batch-limit">批量分析数量（最多 20 条）</label>
+          <div class="input-row"><input id="batch-limit" type="number" min="1" max="20" value="20"><button class="button outline compact" id="batch-score-button">分析数据集</button></div>
         </div>
         <div id="batch-result" class="batch-result empty" aria-live="polite">导入后可批量分析当前数据集</div>
       </article>
@@ -72,10 +72,10 @@
       <article class="panel dtd-panel">
         <div class="panel-heading"><div><p class="section-label">03 / DTD ANALYSIS</p><h2>单指标检查</h2></div><span class="panel-index">03</span></div>
         <p class="muted">使用详细任务描述提示，单独核验某个 CVSS 指标。</p>
-        <div class="form-grid">
-          <label class="field-label">指标<select id="dtd-metric"><option value="attack_vector">AV · 攻击向量</option><option value="attack_complexity">AC · 攻击复杂度</option><option value="privileges_required">PR · 权限要求</option><option value="user_interaction">UI · 用户交互</option><option value="scope">S · 范围</option><option value="confidentiality">C · 机密性</option><option value="integrity">I · 完整性</option><option value="availability">A · 可用性</option></select></label>
-          <label class="field-label">漏洞描述<textarea id="dtd-description" rows="3" placeholder="输入一段漏洞描述..."></textarea></label>
-        </div>
+        <label class="field-label" for="dtd-metric">指标</label>
+        <div class="input-row"><select id="dtd-metric"><option value="attack_vector">AV · 攻击向量</option><option value="attack_complexity">AC · 攻击复杂度</option><option value="privileges_required">PR · 权限要求</option><option value="user_interaction">UI · 用户交互</option><option value="scope">S · 范围</option><option value="confidentiality">C · 机密性</option><option value="integrity">I · 完整性</option><option value="availability">A · 可用性</option></select></div>
+        <label class="field-label" for="dtd-description" style="margin-top:14px">漏洞描述</label>
+        <div class="input-row"><textarea id="dtd-description" rows="3" placeholder="输入一段漏洞描述..."></textarea></div>
         <button class="button outline" id="dtd-predict-button">运行单指标分析 <span>↗</span></button>
         <div id="dtd-result" class="dtd-result empty" aria-live="polite">选择指标并输入描述后开始分析</div>
       </article>
@@ -87,6 +87,47 @@
         <div class="review-actions"><button class="button ghost" id="compare-button">评分差异 <span>→</span></button><button class="button ghost" id="dtd-score-button">完整 DTD 评分</button></div>
         <div id="compare-result" class="compare-result">尚未选择记录</div>
         <pre id="lookup-result" class="json-view" aria-live="polite">等待查询...</pre>
+      </article>
+    </section>
+
+    <section class="predict-grid" id="predict">
+      <article class="panel predict-panel">
+        <div class="panel-heading"><div><p class="section-label">05 / UNIFIED PREDICT</p><h2>多策略预测</h2></div><span class="panel-index">05</span></div>
+        <p class="muted">选择模型、策略与 shots 数量，调用统一预测接口。</p>
+        <div class="form-grid">
+          <div class="form-cell"><label class="field-label" for="predict-model">模型</label><div class="input-row"><input id="predict-model" placeholder="留空使用默认 DeepSeek-V4-Flash"></div></div>
+          <div class="form-cell"><label class="field-label" for="predict-strategy">策略</label><div class="input-row"><select id="predict-strategy"><option value="dtd_fewshot">DTD Few-Shot（推荐）</option><option value="dtd">DTD 零样本</option><option value="fvp">FVP 全向量</option><option value="std">STD 基线</option></select></div></div>
+          <div class="form-cell"><label class="field-label" for="predict-version">CVSS 版本</label><div class="input-row"><select id="predict-version"><option value="3.1">v3.1</option><option value="4.0">v4.0</option></select></div></div>
+          <div class="form-cell"><label class="field-label" for="predict-shots">Shots 数量</label><div class="input-row"><input id="predict-shots" type="number" min="0" max="64" value="24"></div></div>
+          <div class="form-cell"><label class="field-label" for="predict-metric">指标</label><div class="input-row"><select id="predict-metric"><option value="attack_vector">AV · 攻击向量</option><option value="attack_complexity">AC · 攻击复杂度</option><option value="privileges_required">PR · 权限要求</option><option value="user_interaction">UI · 用户交互</option><option value="scope">S · 范围</option><option value="confidentiality">C · 机密性</option><option value="integrity">I · 完整性</option><option value="availability">A · 可用性</option></select></div></div>
+          <div class="form-cell form-cell-full"><label class="field-label" for="predict-description">漏洞描述</label><div class="input-row"><textarea id="predict-description" rows="3" placeholder="输入一段漏洞描述..."></textarea></div></div>
+        </div>
+        <div class="predict-actions">
+          <button class="button primary" id="predict-button">运行预测 <span>↗</span></button>
+          <button class="button outline" id="predict-all-button">预测全部指标 <span>↗</span></button>
+        </div>
+        <div id="predict-result" class="predict-result empty" aria-live="polite">配置参数后开始预测</div>
+        <div id="predict-history" class="predict-history" aria-label="预测历史"></div>
+      </article>
+
+      <article class="panel viz-panel">
+        <div class="panel-heading"><div><p class="section-label">06 / VISUALIZATION</p><h2>预测可视化</h2></div><span class="panel-index">06</span></div>
+        <p class="muted">雷达图展示八项指标，条形图对比三方评分。</p>
+        <label class="field-label" for="viz-cve-id">CVE ID</label>
+        <div class="input-row"><input id="viz-cve-id" placeholder="例如 CVE-2024-0001"><button class="button outline compact" id="viz-load-button">加载对比视图</button></div>
+        <div class="viz-legend-row" id="viz-legend-row"></div>
+        <div class="viz-canvas-wrap">
+          <div class="viz-canvas-item">
+            <p class="viz-canvas-title">指标雷达图</p>
+            <canvas id="radar-chart" width="420" height="420" aria-label="指标雷达图"></canvas>
+          </div>
+          <div class="viz-canvas-item">
+            <p class="viz-canvas-title">评分对比</p>
+            <canvas id="bar-chart" width="420" height="420" aria-label="评分对比条形图"></canvas>
+          </div>
+        </div>
+        <div id="viz-legend" class="viz-legend" aria-live="polite">加载 CVE 后显示官方 vs LLM vs Worst Case 对比</div>
+        <div id="viz-table-wrap" class="viz-table-wrap"></div>
       </article>
     </section>
 

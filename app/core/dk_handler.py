@@ -1,11 +1,11 @@
-from typing import Dict, Any
+from __future__ import annotations
+
 from app.schemas import (
     AVEnum, ACEnum, PREnum, UIEnum, SEnum, CEnum, IEnum, AEnum,
     CvssAllPrediction
 )
 
-# Worst Case 保守映射表（需求指定映射关系）
-WORST_CASE_MAP: Dict[str, Any] = {
+WORST_CASE_MAP: dict[str, object] = {
     "av": AVEnum.NETWORK,
     "ac": ACEnum.LOW,
     "pr": PREnum.NONE,

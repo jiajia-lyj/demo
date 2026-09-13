@@ -19,6 +19,15 @@ def test_health():
     assert "llm_model" in response.json()
 
 
+def test_model_capabilities():
+    response = client.get("/api/v1/models/capabilities")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["models"]
+    assert "supports_few_shot" in payload["active_model"]
+    assert "context_length" in payload["active_model"]
+
+
 def test_score_without_llm():
     response = client.post("/api/v1/score/CVE-2099-1?use_llm=false")
     assert response.status_code == 200

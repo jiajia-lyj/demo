@@ -1,9 +1,67 @@
 services:
   cvss-api:
     build: .
+    container_name: cvss-api
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DATABASE_PATH=data/cvss.db
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_API_KEY=ollama
+      - LLM_MODEL=deepseek-r1:7b
     volumes:
       - ./data:/app/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - cvss-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cvss-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - cvss-net
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: cvss-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pulling deepseek-r1:7b model into Ollama..."
+        ollama pull deepseek-r1:7b
+        echo "Model deepseek-r1:7b ready."
+        echo "Available models:"
+        ollama list
+    restart: "no"
+    networks:
+      - cvss-net
+
+volumes:
+  ollama-models:
+
+networks:
+  cvss-net:
+    driver: bridge

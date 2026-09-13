@@ -23,10 +23,12 @@ class Database:
         with self.connect() as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS cve_records (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, cve_id TEXT UNIQUE NOT NULL,
-                    description TEXT NOT NULL, published_date TEXT, updated_date TEXT,
-                    affected_software TEXT, raw_data TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
-                );
+    id INTEGER PRIMARY KEY AUTOINCREMENT, cve_id TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL, published_date TEXT, updated_date TEXT,
+    affected_software TEXT, cvss_version TEXT, cvss_vector TEXT,
+    cvss_base_score REAL, cvss_severity TEXT,
+    raw_data TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
                 CREATE TABLE IF NOT EXISTS cvss_scores (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, cve_id TEXT NOT NULL,
                     cvss_vector TEXT, base_score REAL, severity TEXT, llm_model TEXT,
@@ -36,17 +38,55 @@ class Database:
                 );
             """)
 
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(cve_records)"
+                ).fetchall()
+            }
+
+            migrations = {
+                "cvss_version": "TEXT",
+                "cvss_vector": "TEXT",
+                "cvss_base_score": "REAL",
+                "cvss_severity": "TEXT",
+            }
+
+            for column, column_type in migrations.items():
+                if column not in columns:
+                    connection.execute(
+                        f"ALTER TABLE cve_records ADD COLUMN {column} {column_type}"
+                    )
+
     def upsert_cves(self, records: list[CVERecord]) -> int:
         with self.connect() as connection:
             for record in records:
                 connection.execute("""INSERT INTO cve_records
-                    (cve_id, description, published_date, updated_date, affected_software, raw_data)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(cve_id) DO UPDATE SET description=excluded.description,
-                    published_date=excluded.published_date, updated_date=excluded.updated_date,
-                    affected_software=excluded.affected_software, raw_data=excluded.raw_data""",
-                    (record.cve_id, record.description, record.published_date, record.updated_date,
-                     record.affected_software, json.dumps(record.raw_data or {}, ensure_ascii=False)))
+                    (cve_id, description, published_date, updated_date, affected_software,
+                     cvss_version, cvss_vector, cvss_base_score, cvss_severity, raw_data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(cve_id) DO UPDATE SET
+                    description=excluded.description,
+                    published_date=excluded.published_date,
+                    updated_date=excluded.updated_date,
+                    affected_software=excluded.affected_software,
+                    cvss_version=excluded.cvss_version,
+                    cvss_vector=excluded.cvss_vector,
+                    cvss_base_score=excluded.cvss_base_score,
+                    cvss_severity=excluded.cvss_severity,
+                    raw_data=excluded.raw_data""",
+                                   (
+                                       record.cve_id,
+                                       record.description,
+                                       record.published_date,
+                                       record.updated_date,
+                                       record.affected_software,
+                                       record.cvss_version,
+                                       record.cvss_vector,
+                                       record.cvss_base_score,
+                                       record.cvss_severity,
+                                       json.dumps(record.raw_data or {}, ensure_ascii=False),
+                                   ))
         return len(records)
 
     def get_cve(self, cve_id: str) -> dict[str, Any] | None:
@@ -54,9 +94,18 @@ class Database:
             row = connection.execute("SELECT * FROM cve_records WHERE cve_id=?", (cve_id,)).fetchone()
         return dict(row) if row else None
 
-    def list_cves(self, limit: int) -> list[dict[str, Any]]:
+    def list_cves(self, limit: int | None = None) -> list[dict[str, Any]]:
         with self.connect() as connection:
-            rows = connection.execute("SELECT * FROM cve_records ORDER BY cve_id LIMIT ?", (limit,)).fetchall()
+            if limit is None:
+                rows = connection.execute(
+                    "SELECT * FROM cve_records ORDER BY cve_id"
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM cve_records ORDER BY cve_id LIMIT ?",
+                    (limit,),
+                ).fetchall()
+
         return [dict(row) for row in rows]
 
     def save_score(self, cve_id: str, result: dict[str, Any]) -> None:

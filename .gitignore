@@ -4,3 +4,7 @@ __pycache__/
 .env
 data/*.db
 data/*.sqlite
+data/*.json
+data/chroma_db/
+data/raw/
+data/processed/

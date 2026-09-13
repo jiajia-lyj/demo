@@ -122,6 +122,10 @@ class CVERecord(BaseModel):
     published_date: str | None = None
     updated_date: str | None = None
     affected_software: str | None = None
+    cvss_version: str | None = None
+    cvss_vector: str | None = None
+    cvss_base_score: float | None = None
+    cvss_severity: str | None = None
     raw_data: dict[str, Any] | None = None
 
 
@@ -158,7 +162,7 @@ class ImportResponse(BaseModel):
 
 class BatchScoreRequest(BaseModel):
     cve_ids: list[str] | None = None
-    limit: int = Field(default=20, ge=1, le=500)
+    limit: int = Field(default=20, ge=1, le=20)
     use_llm: bool = True
 
 
@@ -183,3 +187,54 @@ class DTDScoreResponse(BaseModel):
     dtd_values: dict[str, str]
     llm_model: str | None = None
     timestamp: datetime
+
+class PredictStrategy(str, Enum):
+    DTD = "dtd"
+    DTD_FEWSHOT = "dtd_fewshot"
+    FVP = "fvp"
+    STD = "std"
+
+
+class CvssVersion(str, Enum):
+    V31 = "3.1"
+    V40 = "4.0"
+
+
+class PredictRequest(BaseModel):
+    cve_description: str = Field(min_length=1)
+    metric: str = Field(min_length=1)
+    strategy: PredictStrategy = PredictStrategy.DTD_FEWSHOT
+    shots: int = Field(default=24, ge=0, le=64)
+    model: str | None = None
+    cvss_version: CvssVersion = CvssVersion.V31
+
+
+class PredictResponse(BaseModel):
+    metric: str
+    metric_name: str
+    value: str
+    valid_labels: list[str]
+    strategy: str
+    shots_requested: int
+    shots_used: int
+    model: str
+    cvss_version: str
+    context_info: dict[str, Any] | None = None
+
+
+class CompareViewRequest(BaseModel):
+    cve_id: str = Field(pattern=r"^CVE-\d{4}-\d+$")
+
+
+class CompareViewResponse(BaseModel):
+    cve_id: str
+    official_score: float | None = None
+    official_vector: str | None = None
+    official_metrics: dict[str, str] | None = None
+    llm_score: float | None = None
+    llm_vector: str | None = None
+    llm_metrics: dict[str, str] | None = None
+    worst_case_score: float | None = None
+    worst_case_vector: str | None = None
+    worst_case_metrics: dict[str, str] | None = None
+    difference: float | None = None

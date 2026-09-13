@@ -7,10 +7,12 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.core.llm_client import get_instructor_client
+from app.services.llm_service import LLMFactory
 from app.core.dk_handler import handle_dk_output
 from app.core.prompt_templates import DONT_KNOW, build_dtd_prompt, build_std_prompt
 from app.core.prompts.fvp_template import FVP_SYSTEM_PROMPT, FVP_USER_TEMPLATE
 from app.schemas import CVSSLLMResponse, CvssAllPrediction
+from app.utils.context_manager import ContextBudget, manage_context
 from app.utils.fvp_parser import parse_fvp_response
 
 
@@ -29,22 +31,69 @@ class LLMEnhancer:
     def enabled(self) -> bool:
         return bool(self.settings.llm_base_url and self.settings.llm_api_key)
 
-    def enhance(self, description: str, cve_id: str) -> tuple[dict[str, str] | None, float | None, dict[str, int] | None]:
+    @property
+    def api_model(self) -> str:
+        return LLMFactory(self.settings).api_model
+
+    def api_model_for(self, model: str) -> str:
+        return LLMFactory(Settings(
+            llm_base_url=self.settings.llm_base_url,
+            llm_api_key=self.settings.llm_api_key,
+            llm_model=model,
+        )).api_model
+
+    @staticmethod
+    def _log_llm_error(error: Exception, metric: str, context: str) -> None:
+        """Log LLM call errors, highlighting DeepSeek balance issues."""
+        error_text = str(error)
+        if "402" in error_text or "Insufficient Balance" in error_text:
+            logger.warning(
+                "DeepSeek balance insufficient for %s metric %s; "
+                "add balance or replace DEEPSEEK_API_KEY",
+                context, metric,
+            )
+        else:
+            logger.warning("%s LLM call failed for %s: %s", context, metric, error)
+
+    def enhance(
+        self,
+        description: str,
+        cve_id: str,
+        rag_context: str | None = None,
+    ) -> tuple[dict[str, str] | None, float | None, dict[str, int] | None]:
         if not self.enabled:
             return None, None, None
+
         prompt = (
             "你是 CVSS v3.1 专家。根据漏洞描述判断八个指标。"
-            "无法确定时使用 DONT_KNOW，不要猜测。\n漏洞描述：" + description
+            "无法确定时使用 DONT_KNOW，不要猜测。\n"
         )
+
+        if rag_context:
+            prompt += (
+                "以下是从历史 CVE 数据中检索到的相似漏洞。"
+                "仅将其作为辅助参考，不要直接复制其评分；"
+                "如果参考信息与当前漏洞描述不一致，以当前漏洞描述为准。\n"
+                "相似漏洞参考：\n"
+                + rag_context
+                + "\n"
+            )
+
+        prompt += "当前漏洞描述：" + description
+
         client = get_instructor_client(self.settings)
         result = client.chat.completions.create(
-            model=self.settings.llm_model,
+            model=self.api_model,
             messages=[{"role": "user", "content": prompt}],
             response_model=CVSSLLMResponse,
             temperature=self.settings.llm_temperature,
         )
         values = {
-            name: metric.value
+            name: (
+                metric.get("value")
+                if isinstance(metric, dict)
+                else getattr(metric, "value", metric)
+            )
             for name, metric in result.model_dump().items()
         }
         return values, 0.8, None
@@ -56,27 +105,78 @@ class LLMEnhancer:
         client = get_instructor_client(self.settings)
         try:
             result = client.chat.completions.create(
-                model=self.settings.llm_model,
+                model=self.api_model,
                 messages=[{"role": "user", "content": prompt.render(cve_description)}],
                 response_model=MetricPrediction,
                 temperature=self.settings.llm_temperature,
             )
         except Exception as error:
-            error_text = str(error)
-            if "402" in error_text or "Insufficient Balance" in error_text:
-                logger.warning(
-                    "DeepSeek balance is insufficient for DTD metric %s; "
-                    "add balance or replace the configured API key",
-                    metric,
-                )
-            else:
-                logger.warning("DTD predict LLM call failed for %s: %s", metric, error)
+            self._log_llm_error(error, metric, "DTD")
             return DONT_KNOW
         value = str(result.value).strip().upper()
         if value not in prompt.valid_labels:
             logger.warning("DTD predict returned invalid label %r for %s", value, metric)
             return DONT_KNOW
         return value
+
+    def predict_with_dtd_fewshot(
+        self,
+        cve_description: str,
+        metric: str,
+        shots: int = 24,
+        model: str | None = None,
+    ) -> tuple[str, ContextBudget]:
+        """DTD Few-Shot 预测：在零样本 DTD 基础上附加少样本示例。
+
+        当「DTD 详细定义 + shots 个示例 + 漏洞描述」超出模型上下文窗口时，
+        自动按优先级减少 shots 数量或截断描述，确保提示可被模型接受。
+
+        Args:
+            cve_description: 漏洞描述文本。
+            metric: CVSS 指标名（支持全名/缩写/snake_case）。
+            shots: 少样本示例数量，默认 24。
+            model: 指定模型名覆盖 settings.llm_model（用于上下文窗口估算）。
+
+        Returns:
+            二元组 ``(value, budget)``：``value`` 为预测标签或 DONT_KNOW；
+            ``budget`` 为上下文预算信息，含调整后的 shots 与截断原因。
+        """
+        target_model = model or self.settings.llm_model
+        prompt = build_dtd_prompt(metric, shots=shots)
+        budget = manage_context(
+            spec_text=prompt.spec_text,
+            fewshot_text=prompt.fewshot_text,
+            cve_description=cve_description,
+            shots=shots,
+            model=target_model,
+        )
+        effective_prompt = build_dtd_prompt(metric, shots=budget.adjusted_shots)
+        effective_description = budget.truncated_description
+
+        if budget.adjusted_shots != shots:
+            logger.info(
+                "DTD few-shot context adjusted for %s: shots %d->%d, reason=%s",
+                metric, shots, budget.adjusted_shots, budget.reason,
+            )
+
+        if not self.enabled:
+            return DONT_KNOW, budget
+        client = get_instructor_client(self.settings)
+        try:
+            result = client.chat.completions.create(
+                model=self.api_model_for(target_model),
+                messages=[{"role": "user", "content": effective_prompt.render(effective_description)}],
+                response_model=MetricPrediction,
+                temperature=self.settings.llm_temperature,
+            )
+        except Exception as error:
+            self._log_llm_error(error, metric, "DTD few-shot")
+            return DONT_KNOW, budget
+        value = str(result.value).strip().upper()
+        if value not in effective_prompt.valid_labels:
+            logger.warning("DTD few-shot returned invalid label %r for %s", value, metric)
+            return DONT_KNOW, budget
+        return value, budget
 
     def predict_with_std(
         self, cve_description: str, metric: str, labels: list[str]
@@ -147,7 +247,7 @@ class LLMEnhancer:
     def _call_llm(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         """Call the OpenAI-compatible endpoint used by the FVP text response."""
         payload = {
-            "model": self.settings.llm_model,
+            "model": self.api_model,
             "messages": messages,
             "temperature": self.settings.llm_temperature,
         }

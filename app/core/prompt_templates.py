@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.utils.context_manager import FewShotExample, select_fewshot_examples
+
 
 @dataclass(frozen=True)
 class MetricSpec:
@@ -306,6 +308,8 @@ class DTDPrompt:
     valid_labels: list[str]
     spec_text: str
     template: str
+    fewshot_text: str = ""
+    shots: int = 0
 
     def render(self, cve_description: str) -> str:
         return self.template.replace("{cve_description}", cve_description)
@@ -320,19 +324,33 @@ def _resolve_metric(metric_name: str) -> MetricSpec:
     return CVSS_V31_METRICS[snake]
 
 
-def build_dtd_prompt(metric_name: str) -> DTDPrompt:
-    """构建单个 CVSS 指标的 DTD 零样本提示模板。
+def _render_fewshot_block(examples: list[FewShotExample]) -> str:
+    """将少样本示例渲染为提示文本块。"""
+    if not examples:
+        return ""
+    lines = ["### Few-Shot Examples"]
+    for i, ex in enumerate(examples, 1):
+        lines.append(f"\n#### Example {i} ({ex.cve_id})")
+        lines.append(f"Description: {ex.description}")
+        lines.append(f"Correct Label: {ex.label}")
+    return "\n".join(lines)
+
+
+def build_dtd_prompt(metric_name: str, shots: int = 0) -> DTDPrompt:
+    """构建单个 CVSS 指标的 DTD 提示模板，可选附加少样本示例。
 
     将 CVSS v3.1 官方规范文档中该指标的详细定义及各标签完整描述嵌入提示，
-    形成可被 LLM 直接使用的零样本提示模板。模板中保留 ``{cve_description}``
-    占位符，由调用方填充实际漏洞描述。
+    形成可被 LLM 直接使用的提示模板。模板中保留 ``{cve_description}``
+    占位符，由调用方填充实际漏洞描述。当 ``shots > 0`` 时，从少样本池中
+    选取对应指标的示例并插入提示，增强模型对标签语义的理解。
 
     Args:
         metric_name: 指标名称，支持全名（如 ``"Attack Vector"``）、
             缩写（如 ``"AV"``）或 snake_case（如 ``"attack_vector"``）。
+        shots: 少样本示例数量，0 表示零样本模式。
 
     Returns:
-        :class:`DTDPrompt`，包含规范文本、合法标签列表与提示模板。
+        :class:`DTDPrompt`，包含规范文本、合法标签列表、提示模板与少样本文本。
 
     Raises:
         ValueError: 当 ``metric_name`` 无法识别时。
@@ -350,15 +368,24 @@ def build_dtd_prompt(metric_name: str) -> DTDPrompt:
         f"### Metric Values\n{labels_block}"
     )
 
+    examples: list[FewShotExample] = []
+    fewshot_text = ""
+    if shots > 0:
+        examples = select_fewshot_examples(spec.snake, shots)
+        fewshot_text = _render_fewshot_block(examples)
+
     instruction = DTD_INSTRUCTION.format(metric_name=f"{spec.name} ({spec.abbr})")
 
-    template = (
-        f"{spec_text}\n\n"
-        f"### Vulnerability Description\n{{cve_description}}\n\n"
-        f"### Instructions\n{instruction}\n\n"
-        f"### Valid Labels\n{valid_block}\n\n"
-        f"### Response Format\n返回 JSON: {{\"value\": \"<one of {valid_block}>\"}}"
-    )
+    parts = [
+        spec_text,
+        f"### Vulnerability Description\n{{cve_description}}",
+        f"### Instructions\n{instruction}",
+        f"### Valid Labels\n{valid_block}",
+        f'### Response Format\n返回 JSON: {{\"value\": \"<one of {valid_block}>\"}}',
+    ]
+    if fewshot_text:
+        parts.insert(1, fewshot_text)
+    template = "\n\n".join(parts)
 
     return DTDPrompt(
         metric_name=spec.name,
@@ -366,6 +393,8 @@ def build_dtd_prompt(metric_name: str) -> DTDPrompt:
         valid_labels=valid_labels,
         spec_text=spec_text,
         template=template,
+        fewshot_text=fewshot_text,
+        shots=len(examples),
     )
 
 
